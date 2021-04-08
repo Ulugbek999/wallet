@@ -1,29 +1,38 @@
 package types
 
+//Money - represents a monetary amount
+//in minimum units (cents, kopecks, diramas, etc.).
 type Money int64
 
+//PaymentCategory - represents the category in which
+//the payment was made(auto, pharmacies, restaurants etc.).
 type PaymentCategory string
 
+//PaymentStatus - represents the status of the payments
 type PaymentStatus string
 
+//Predefined payment statuses
 const (
-	PaymentStatusOk PaymentStatus = "OK"
-	PaymentStatusFail PaymentStatus = "FAIL"
+	PaymentStatusOK         PaymentStatus = "OK"
+	PaymentStatusFail       PaymentStatus = "FAIL"
 	PaymentStatusInProgress PaymentStatus = "INPROGRESS"
 )
 
+//Payment - represents information about the payment source.
 type Payment struct {
-	ID string
-	accountID int64
-	Amount Money
-	Catergory PaymentCategory
-	Status PaymentStatus
+	ID        string
+	AccountID int64
+	Amount    Money
+	Category  PaymentCategory
+	Status    PaymentStatus
 }
 
+//Phone - phone number
 type Phone string
 
+//
 type Account struct {
-	ID int
-	Phone Phone
+	ID      int64
+	Phone   Phone
 	Balance Money
 }
