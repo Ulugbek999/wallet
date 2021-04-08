@@ -1,54 +1,53 @@
 package wallet
 
 import (
+	"errors"
+
 	"github.com/Ulugbek999/wallet/pkg/types"
 )
 
-
-
+var (
+	ErrPhoneRegistered = errors.New("phone already registered")
+	ErrAccountNotFound = errors.New("account not found")
+)
 
 type Service struct {
 	nextAccountID int64
-	accounts []types.Account
-	payments []types.Payment
-
+	accounts      []*types.Account
+	// payments      []*types.Payment
 }
 
+func (s *Service) RegisterAccount(phone types.Phone) (*types.Account, error) {
+	for _, account := range s.accounts {
+		if account.Phone == phone {
+			return nil, ErrPhoneRegistered
+		}
+	}
+	s.nextAccountID++
+	account := &types.Account{
+		ID:      s.nextAccountID,
+		Phone:   phone,
+		Balance: 0,
+	}
+	s.accounts = append(s.accounts, account)
 
-func RegisterAccount(service *Service, phone types.Phone)  {
-	
-	for _, account := range service.accounts {
-		if account.Phone == phone{
-			return
+	return account, nil
+}
+
+func (s *Service) FindAccountByID(accountID int64) (*types.Account, error) {
+
+	var account *types.Account
+	for _, acc := range s.accounts {
+		if acc.ID == accountID {
+			account = acc
+			break
 		}
 	}
 
-	service.nextAccountID++
-	service.accounts = append(service.accounts, types.Account{
-		ID: int(service.nextAccountID),
-		Phone: phone,
-		Balance: 0,
-	})
-
-
-}
-
-func (service *Service)RegisterAccount( phone types.Phone)  {
-	
-	for _, account := range service.accounts {
-		if account.Phone == phone{
-			return
-		}
+	if account == nil {
+		return nil, ErrAccountNotFound
 	}
-
-	service.nextAccountID++
-	service.accounts = append(service.accounts, types.Account{
-		ID: int(service.nextAccountID),
-		Phone: phone,
-		Balance: 0,
-	})
-
-
+	return account, nil
 }
 
 
@@ -56,65 +55,3 @@ func (service *Service)RegisterAccount( phone types.Phone)  {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-/*func FindAccountByID(accountID int64) (*types.Account, error) {
-
-
-
-
-
-
-
-}*/
-
-
-/*
-//CategoriesAvg расчитовает среднюю сумму платежа
-func CategoriesAvg(payments []types.Payment) map[types.Category]types.Money {
-	count := map[types.Category]types.Money{}
-	result := map[types.Category]types.Money{}
-
-	for _, payment := range payments {
-		result[payment.Category] += payment.Amount
-		count[payment.Category]++
-	}
-
-	for key := range result {
-		result[key] /= count[key]
-	}
-
-	return result
-}
-
-
-
-
-//PeriodsDynamic расчитовает сумму платежа по категории
-func PeriodsDynamic(first map[types.Category]types.Money, second map[types.Category]types.Money) map[types.Category]types.Money {
-
-	amount := map[types.Category]types.Money{}
-
-	for sum := range second {
-		amount[sum] += second[sum]
-	}
-
-	for sum := range first {
-		amount[sum] -= first[sum]
-	}
-
-	return amount
-}
-
-*/
