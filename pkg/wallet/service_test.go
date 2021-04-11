@@ -1,154 +1,187 @@
 package wallet
 
 import (
-	"fmt"
+	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/Ulugbek999/wallet/pkg/types"
-
-	"github.com/google/uuid"
 )
 
 type testService struct {
 	*Service
 }
 
-func newTestService() *testService {
+func NewTestService() *testService {
 	return &testService{Service: &Service{}}
 }
-
-func (s *testService) addAccountWithBalance(phone types.Phone, balance types.Money) (*types.Account, error) {
+func (s *testService) addAccount(phone types.Phone, balance types.Money) (*types.Account, *types.Payment, error) {
+	if balance < 1 {
+		return nil, nil, errors.New("Please give balance with positive number")
+	}
 	account, err := s.RegisterAccount(phone)
 	if err != nil {
-		return nil, fmt.Errorf("can't register account, error = %v", err)
+		return nil, nil, err
 	}
-
 	err = s.Deposit(account.ID, balance)
 	if err != nil {
-		return nil, fmt.Errorf("can't deposti account, error = %v", err)
+		return nil, nil, err
 	}
-
-	return account, nil
+	payment, err := s.Pay(account.ID, 1, "cafe")
+	if err != nil {
+		return nil, nil, err
+	}
+	return account, payment, nil
 }
-
-func TestService_FindAccountByID_found(t *testing.T) {
-	svc := newTestService()
-	account, err := svc.addAccountWithBalance("+992001010000", 1)
+func TestRegisterAccount(t *testing.T) {
+	wallet := NewTestService()
+	_, _, err := wallet.addAccount("+99922292", 10)
 	if err != nil {
-		t.Error(err)
+		t.Error("for first user get Erro!!!(err)")
 	}
-	_, err = svc.FindAccountByID(account.ID)
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-func TestService_FindAccountByID_notFound(t *testing.T) {
-	svc := &Service{}
-	_, err := svc.RegisterAccount("+992001010000")
-	if err != nil {
-		t.Error(err)
-	}
-	var accountID int64 = 123
-	_, err = svc.FindAccountByID(accountID)
+	_, _, err = wallet.addAccount("+99922292", 10)
 	if err == nil {
-		t.Errorf("User with ID %v found", accountID)
+		t.Error("this user registered second times but we have not get Error!!!(err)")
 	}
 }
-
-func TestService_FindPaymentByID_found(t *testing.T) {
-	svc := &Service{}
-	account, err := svc.RegisterAccount("+992001010000")
-	svc.Deposit(account.ID, 20_000_00)
+func TestFindAccountByID(t *testing.T) {
+	var wallet Service
+	_, err := wallet.RegisterAccount("+99999222222")
 	if err != nil {
-		t.Error(err)
+		t.Error("for first user get Erro!!!(err.2)")
 	}
-	payment, err := svc.Pay(account.ID, 10_000_00, "Mobile")
+	_, err = wallet.FindAccountByID(1)
 	if err != nil {
-		t.Error(err)
-	}
-	_, err = svc.FindPaymentByID(payment.ID)
-	if err != nil {
-		t.Error(err)
+		t.Error("can not find Account by ID")
 	}
 }
-
-func TestService_FindPaymentByID_notFound(t *testing.T) {
-	svc := &Service{}
-	paymentID := uuid.New().String()
-	_, err := svc.FindPaymentByID(paymentID)
-	if err == nil {
-		t.Errorf("Found payment by ID: %v", paymentID)
+func TestPay(t *testing.T) {
+	wallet := NewTestService()
+	account, _, err := wallet.addAccount("+123123", 10)
+	if err != nil {
+		t.Error("Pay(): for first user get Erro!!!(err(Pay))")
+	}
+	payment, err := wallet.Pay(1, types.Money(5), "cafe")
+	if err != nil {
+		t.Error("Pay(): something wrong while paying")
+	}
+	account1, _ := wallet.FindAccountByID(payment.AccountID)
+	if account.Balance != account1.Balance {
+		t.Error("Pay(): something wrong while paying without err")
 	}
 }
-
-func TestService_Reject_success(t *testing.T) {
-	svc := newTestService()
-
-	phone := types.Phone("+992001010000")
-	account, err := svc.addAccountWithBalance(phone, 10_000_00)
+func TestReject(t *testing.T) {
+	var wallet Service
+	_, err := wallet.RegisterAccount("+99999222222")
+	account, _ := wallet.FindAccountByID(1)
+	account.Balance += 10
 	if err != nil {
-		t.Error(err)
-		return
+		t.Error("for first user get Error!!!(err.2)")
 	}
-
-	payment, err := svc.Pay(account.ID, 1000_0, "auto")
+	payment, err := wallet.Pay(1, types.Money(5), "cafe")
 	if err != nil {
-		t.Errorf("Reject(): can't create payment, error = %v", err)
-		return
+		t.Error("something wrong while paying")
 	}
-
-	err = svc.Reject(payment.ID)
-	if err != nil {
-		t.Errorf("Reject(): error = %v", err)
-		return
+	if payment.Amount != 5 {
+		t.Error("something wrong while paying without err")
 	}
-}
-
-func TestService_Reject_paymentFound(t *testing.T) {
-	svc := &Service{}
-	account, err := svc.RegisterAccount("+992001010000")
-	svc.Deposit(account.ID, 20_000_00)
-	if err != nil {
-		t.Error(err)
+	err = wallet.Reject(payment.ID)
+	account, _ = wallet.FindAccountByID(1)
+	if account.Balance != 10 {
+		t.Error("Reject is uncomplite!!")
 	}
-	payment, err := svc.Pay(account.ID, 10_000_00, "Mobile")
-	if err != nil {
-		t.Error(err)
-	}
-	err = svc.Reject(payment.ID)
 	if err != nil {
 		t.Error(err)
 	}
 }
-
-func TestService_Reject_paymentNotFound(t *testing.T) {
-	svc := &Service{}
-	paymentID := uuid.New().String()
-	err := svc.Reject(paymentID)
-	if err == nil {
-		t.Errorf("Found payment by ID: %v", paymentID)
+func TestFindPaymentByID(t *testing.T) {
+	var wallet Service
+	_, err := wallet.RegisterAccount("+99999222222")
+	account, _ := wallet.FindAccountByID(1)
+	account.Balance += 10
+	if err != nil {
+		t.Error("for first user get Error!!!(err.2)")
+	}
+	//succes
+	payment, err := wallet.Pay(1, types.Money(5), "cafe")
+	if err != nil {
+		t.Error("something wrong while paying")
+	}
+	if payment.Amount != 5 {
+		t.Error("something wrong while paying without err")
+	}
+	_, err1 := wallet.FindPaymentByID(payment.ID)
+	if err1 != nil {
+		t.Error("FinPaymentByID not correct")
 	}
 }
-
-func TestService_Repeat_success(t *testing.T) {
-	s := newTestService()
-
-	account, err := s.addAccountWithBalance("9127660305", 100)
+func TestDeposit(t *testing.T) {
+	var wallet Service
+	_, err := wallet.RegisterAccount("+99999222222")
 	if err != nil {
-		t.Errorf("account => %v", account)
-		return
+		t.Error("for first user get Error!!!(err.2)")
 	}
-
-	payment, err := s.Pay(account.ID, 10, "some")
+	err = wallet.Deposit(1, 10)
 	if err != nil {
-		t.Errorf("payment => %v", payment)
-		return
+		t.Error("something wrong while paying")
 	}
-
-	newPayment, err := s.Repeat(payment.ID)
+	account, _ := wallet.FindAccountByID(1)
+	if account.Balance != 10 {
+		t.Error("something wrong while paying without err")
+	}
+}
+func TestRepeat(t *testing.T) {
+	var init int = 100
+	wallet := NewTestService()
+	account, _, err := wallet.addAccount("+23123", types.Money(100))
 	if err != nil {
-		t.Errorf("newPayment => %v", newPayment)
-		return
+		t.Errorf("Repeat(): Error(): can't add an account: %v", err)
+	}
+	payment, err := wallet.Pay(account.ID, types.Money(10), "cafe")
+	if err != nil {
+		t.Errorf("Repeat(): Error(): can't pay for an account(1): %v", err)
+	}
+	payment, err = wallet.Repeat(payment.ID)
+	if err != nil {
+		t.Errorf("Repeat(): Error(): Repeat not work: %v", err)
+	}
+	if types.Money((init-1)-2*10) != account.Balance {
+		t.Error("Repeat(): Error(): something is wrong")
+	}
+}
+func TestFavoritePayment(t *testing.T) {
+	wallet := NewTestService()
+	_, payment, err := wallet.addAccount("+212124", 100)
+	if err != nil {
+		t.Errorf("FavoritePayment(): Error: can't add account: %v", err)
+	}
+	favorite, err := wallet.FavoritePayment(payment.ID, "first")
+	if err != nil {
+		t.Errorf("FavoritePayment(): Error: FavoritePayment not work: %v", err)
+	}
+	expect := &types.Favorite{
+		ID:        lastIDofFavorite,
+		AccountID: payment.AccountID,
+		Name:      "first",
+		Amount:    payment.Amount,
+		Category:  payment.Category,
+	}
+	if !reflect.DeepEqual(expect, favorite) {
+		t.Errorf("FavoritePayment(): \nhave: %v\ngot: %v\n", expect, payment)
+	}
+}
+func TestPayFromFavorite(t *testing.T) {
+	wallet := NewTestService()
+	_, payment, err := wallet.addAccount("+212124", 100) /// account.Balance = 50
+	if err != nil {
+		t.Errorf("PayFromFavorite(): Error: can't add account: %v", err)
+	}
+	favorite, err := wallet.FavoritePayment(payment.ID, "first")
+	if err != nil {
+		t.Errorf("PayFromFavorite(): Error: FavoritePayment not work: %v", err)
+	}
+	payment, err = wallet.PayFromFavorite(favorite.ID)
+	if err != nil {
+		t.Errorf("PayFromFavorite(): Error: can't pay from favorite: %v", err)
 	}
 }
