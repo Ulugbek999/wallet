@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 	"io"
-
+	"math"
 	"github.com/google/uuid"
 
 	"github.com/Ulugbek999/wallet/pkg/types"
@@ -1186,6 +1186,80 @@ func (s *Service) Import(dir string) error {
 	}
 	return nil
 
+}
+
+
+//FilterPaymentsByFn for
+func (s *Service) FilterPaymentsByFn(filter func(payment types.Payment) bool, goroutines int) ([]types.Payment, error) {
+	var foundPayments []types.Payment
+	
+	var allfoundPayments []types.Payment
+	for _, payment := range s.payments {
+
+		if filter(*payment) == true {
+			foundPayments = append(foundPayments, *payment)
+			
+		}
+	}
+	if foundPayments == nil {
+		return nil, ErrAccountNotFound
+	}
+
+	if goroutines <= 1 {
+		return foundPayments, nil
+	}
+
+	wg := sync.WaitGroup{}
+
+	wg.Add(goroutines) 
+
+	mu := sync.Mutex{}
+
+	lenPay := len(foundPayments)
+	numberOfPaymentPerRoutine := 0
+
+	numberOfPaymentPerRoutine = int(math.Ceil(float64((lenPay + 1) / goroutines)))
+
+	
+
+	index := 0
+	newNumberOfPaymentPerRoutine := numberOfPaymentPerRoutine
+
+	go func() {
+		for i := 0; i < goroutines; i++ {
+			lenPay := len(foundPayments)
+
+			
+
+			defer wg.Done() 
+			var newPayments []types.Payment
+
+			for i := 0; index < numberOfPaymentPerRoutine; i++ {
+				
+				newPayments = append(newPayments, foundPayments[index])
+				
+				index++
+			}
+
+			mu.Lock()
+			numberOfPaymentPerRoutine += newNumberOfPaymentPerRoutine
+
+			allfoundPayments = append(allfoundPayments, newPayments...)
+			mu.Unlock()
+			if (i == goroutines-1) && (len(allfoundPayments) != lenPay) {
+
+				foundLen := len(allfoundPayments)
+				for j := foundLen; j < lenPay; j++ {
+					allfoundPayments = append(allfoundPayments, foundPayments[j])
+				}
+			}
+
+		}
+	}()
+
+
+	wg.Wait()
+	return allfoundPayments, nil
 }
 
 

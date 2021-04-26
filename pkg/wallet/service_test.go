@@ -1,7 +1,6 @@
 package wallet
 
 import (
-	
 	"io/ioutil"
 	"os"
 	"reflect"
