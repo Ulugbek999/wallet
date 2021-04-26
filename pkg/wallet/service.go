@@ -8,7 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
+	"io"
+	"math"
 	"github.com/google/uuid"
 
 	"github.com/Ulugbek999/wallet/pkg/types"
@@ -244,7 +245,7 @@ func (s *Service) ImportFromFile(path string) error {
 	return nil
 }
 
-func (s *Service) Export(dir string) error {
+/*func (s *Service) Export(dir string) error {
 	if s.accounts != nil {
 		result := ""
 		for _, account := range s.accounts {
@@ -294,6 +295,8 @@ func (s *Service) Export(dir string) error {
 	return nil
 }
 
+*/
+/*
 func (s *Service) Import(dir string) error {
 	err := s.actionByAccounts(dir + "/accounts.dump")
 	if err != nil {
@@ -314,7 +317,7 @@ func (s *Service) Import(dir string) error {
 	}
 
 	return nil
-}
+} */
 
 func (s *Service) actionByAccounts(path string) error {
 	byteData, err := ioutil.ReadFile(path)
@@ -683,6 +686,580 @@ func (s *Service) FilterPayments(accountID int64, goroutines int) ([]types.Payme
 	}
 
 	return filteredPayments, nil
+}
+
+
+
+// homework 17
+
+func (s *Service) Export(dir string) error {
+
+	// dir, err := filepath.Abs(dir)
+
+	// if err != nil {
+	// 	log.Print(err)
+
+	// }
+	var err = errors.New("Error")
+	err = nil
+	lenAcou := len(s.accounts)
+
+	if lenAcou != 0 {
+
+		dirAccount := dir + "/accounts.dump"
+		//	log.Print(dirAccount)
+
+		fileAccounts, err := os.Create(dirAccount)
+		if err != nil {
+			log.Print(err)
+
+		}
+
+		defer func() {
+			if cerr := fileAccounts.Close(); err != nil {
+				log.Print(cerr)
+			}
+		}()
+
+		for index, account := range s.accounts {
+			//	account, err = s.FindAccountByID(int64(ind))
+			// fmt.Println(newP2)
+			// fmt.Println(ee3)
+			if index != 0 {
+				_, err = fileAccounts.Write([]byte("\n"))
+				if err != nil {
+					log.Print(err)
+
+				}
+
+			}
+			_, err = fileAccounts.Write([]byte(strconv.FormatInt((account.ID), 10)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = fileAccounts.Write([]byte(";"))
+			if err != nil {
+				log.Print(err)
+
+			}
+			_, err = fileAccounts.Write([]byte(string(account.Phone)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = fileAccounts.Write([]byte(";"))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = fileAccounts.Write([]byte(strconv.FormatInt(int64(account.Balance), 10)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+		}
+	}
+
+	lenPay := len(s.payments)
+	if lenPay != 0 {
+
+		dirPayment := dir + "/payments.dump"
+		filePayments, err := os.Create(dirPayment)
+		if err != nil {
+			log.Print(err)
+
+		}
+
+		defer func() {
+			if cerr := filePayments.Close(); err != nil {
+				log.Print(cerr)
+			}
+		}()
+
+		for index, payment := range s.payments {
+			//	account, err = s.FindAccountByID(int64(ind))
+			// fmt.Println(newP2)
+
+			if index != 0 {
+				_, err = filePayments.Write([]byte("\n"))
+				if err != nil {
+					log.Print(err)
+
+				}
+
+			}
+
+			_, err = filePayments.Write([]byte(string(payment.ID)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = filePayments.Write([]byte(";"))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = filePayments.Write([]byte(strconv.FormatInt(int64(payment.AccountID), 10)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = filePayments.Write([]byte(";"))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = filePayments.Write([]byte(strconv.FormatInt(int64(payment.Amount), 10)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = filePayments.Write([]byte(";"))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = filePayments.Write([]byte(string(payment.Category)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = filePayments.Write([]byte(";"))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = filePayments.Write([]byte(string(payment.Status)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+		}
+	}
+
+	lenFav := len(s.favorites)
+
+	if lenFav != 0 {
+		dirFavorite := dir + "/favorites.dump"
+		fileFavorites, err := os.Create(dirFavorite)
+		if err != nil {
+			log.Print(err)
+
+		}
+
+		defer func() {
+			if cerr := fileFavorites.Close(); err != nil {
+				log.Print(cerr)
+			}
+		}()
+
+		for index, favorite := range s.favorites {
+			//	account, err = s.FindAccountByID(int64(ind))
+			// fmt.Println(newP2)
+
+			if index != 0 {
+				_, err = fileFavorites.Write([]byte("\n"))
+				if err != nil {
+					log.Print(err)
+
+				}
+
+			}
+
+			_, err = fileFavorites.Write([]byte(string(favorite.ID)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = fileFavorites.Write([]byte(";"))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = fileFavorites.Write([]byte(strconv.FormatInt(int64(favorite.AccountID), 10)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = fileFavorites.Write([]byte(";"))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = fileFavorites.Write([]byte(string(favorite.Name)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = fileFavorites.Write([]byte(";"))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = fileFavorites.Write([]byte(strconv.FormatInt(int64(favorite.Amount), 10)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = fileFavorites.Write([]byte(";"))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+			_, err = fileFavorites.Write([]byte(string(favorite.Category)))
+			if err != nil {
+				log.Print(err)
+
+			}
+
+		}
+	}
+
+	return err
+
+}
+
+//Import for
+func (s *Service) Import(dir string) error {
+
+	dirAccount := dir + "/accounts.dump"
+	fileAccount, err := os.Open(dirAccount)
+	//	log.Print(dirAccount)
+	if err != nil {
+		log.Print(err)
+		err = ErrFileNotFound
+	}
+	if err != ErrFileNotFound {
+		defer func() {
+			err := fileAccount.Close()
+			if err != nil {
+				log.Print(err)
+			}
+		}()
+
+		//		log.Printf("%#v", fileAccount)
+
+		content := make([]byte, 0)
+		buf := make([]byte, 4)
+		for {
+			read, err := fileAccount.Read(buf)
+			if err == io.EOF {
+				break
+			}
+			content = append(content, buf[:read]...)
+		}
+
+		data := string(content)
+		newData := strings.Split(data, "\n")
+		//log.Print(data)
+		//log.Print(newData)
+
+		for _, stroka := range newData {
+			//log.Print(stroka)
+			account := &types.Account{}
+			newData2 := strings.Split(stroka, ";")
+			for ind, stroka2 := range newData2 {
+				// if stroka2 == "" {
+				// 	return ErrPhoneRegistered
+				// }
+				//log.Print(stroka2)
+				if ind == 0 {
+					id, _ := strconv.ParseInt(stroka2, 10, 64)
+					account.ID = id
+				}
+				if ind == 1 {
+					account.Phone = types.Phone(stroka2)
+				}
+				if ind == 2 {
+					balance, _ := strconv.ParseInt(stroka2, 10, 64)
+					account.Balance = types.Money(balance)
+
+				}
+
+				//	log.Print(ind1)
+
+			}
+			errExist := 1
+			for _, accountCheck := range s.accounts {
+
+				if accountCheck.ID == account.ID {
+					accountCheck.Phone = account.Phone
+					accountCheck.Balance = account.Balance
+					errExist = 0
+				}
+
+			}
+			if errExist == 1 {
+				s.accounts = append(s.accounts, account)
+			}
+		}
+
+	}
+
+	dirPayment := dir + "/payments.dump"
+	filePayments, err := os.Open(dirPayment)
+	if err != nil {
+		log.Print(err)
+		return ErrFileNotFound
+	}
+	if err != ErrFileNotFound {
+		defer func() {
+			err := filePayments.Close()
+			if err != nil {
+				log.Print(err)
+			}
+		}()
+
+		//		log.Printf("%#v", filePayments)
+
+		contentPayment := make([]byte, 0)
+		bufPayment := make([]byte, 4)
+		for {
+			read, err := filePayments.Read(bufPayment)
+			if err == io.EOF {
+				break
+			}
+			contentPayment = append(contentPayment, bufPayment[:read]...)
+		}
+
+		dataPayment := string(contentPayment)
+		newDataPayment := strings.Split(dataPayment, "\n")
+		//log.Print(data)
+		//log.Print(newData)
+
+		for _, stroka := range newDataPayment {
+			//log.Print(stroka)
+			payment := &types.Payment{}
+			newData2 := strings.Split(stroka, ";")
+			for ind, stroka2 := range newData2 {
+				// if stroka2 == "" {
+				// 	return ErrPhoneRegistered
+				// }
+				//log.Print(stroka2)
+				if ind == 0 {
+					//id, _ := stroka2
+					payment.ID = stroka2
+				}
+				if ind == 1 {
+					accountID, _ := strconv.ParseInt(stroka2, 10, 64)
+					payment.AccountID = int64(accountID)
+				}
+
+				if ind == 2 {
+					balance, _ := strconv.ParseInt(stroka2, 10, 64)
+					payment.Amount = types.Money(balance)
+				}
+
+				if ind == 3 {
+					payment.Category = types.PaymentCategory(stroka2)
+				}
+
+				if ind == 4 {
+					payment.Status = types.PaymentStatus(stroka2)
+				}
+
+				//		log.Print(ind1)
+
+			}
+			errExist := 1
+			for _, paymentCheck := range s.payments {
+
+				if paymentCheck.ID == payment.ID {
+					paymentCheck.AccountID = payment.AccountID
+					paymentCheck.Amount = payment.Amount
+					paymentCheck.Category = payment.Category
+					paymentCheck.Status = payment.Status
+					errExist = 0
+				}
+
+			}
+			if errExist == 1 {
+				s.payments = append(s.payments, payment)
+			}
+		}
+
+	}
+
+	dirFavorite := dir + "/favorites.dump"
+	fileFavorites, err := os.Open(dirFavorite)
+	if err != nil {
+		log.Print(err)
+		err = ErrFileNotFound
+	}
+	if err != ErrFileNotFound {
+		defer func() {
+			err := fileFavorites.Close()
+			if err != nil {
+				log.Print(err)
+			}
+		}()
+
+		//	log.Printf("%#v", fileFavorites)
+
+		contentFavorite := make([]byte, 0)
+		bufFavorite := make([]byte, 4)
+		for {
+			read, err := fileFavorites.Read(bufFavorite)
+			if err == io.EOF {
+				break
+			}
+			contentFavorite = append(contentFavorite, bufFavorite[:read]...)
+		}
+
+		dataFavorite := string(contentFavorite)
+		newDataFavorite := strings.Split(dataFavorite, "\n")
+		//log.Print(data)
+		//log.Print(newData)
+
+		for _, stroka := range newDataFavorite {
+			//log.Print(stroka)
+			favorite := &types.Favorite{}
+			newData2 := strings.Split(stroka, ";")
+			for ind, stroka2 := range newData2 {
+				// if stroka2 == "" {
+				// 	return ErrPhoneRegistered
+				// }
+				//log.Print(stroka2)
+				if ind == 0 {
+					//id, _ := stroka2
+					favorite.ID = stroka2
+				}
+				if ind == 1 {
+					accountID, _ := strconv.ParseInt(stroka2, 10, 64)
+					favorite.AccountID = int64(accountID)
+				}
+
+				if ind == 2 {
+					favorite.Name = stroka2
+				}
+				if ind == 3 {
+					balance, _ := strconv.ParseInt(stroka2, 10, 64)
+					favorite.Amount = types.Money(balance)
+				}
+
+				if ind == 4 {
+					favorite.Category = types.PaymentCategory(stroka2)
+				}
+
+				//	log.Print(ind1)
+
+			}
+			errExist := 1
+			for _, favoriteCheck := range s.favorites {
+
+				if favoriteCheck.ID == favorite.ID {
+					favoriteCheck.AccountID = favorite.AccountID
+					favoriteCheck.Name = favorite.Name
+					favoriteCheck.Amount = favorite.Amount
+					favoriteCheck.Category = favorite.Category
+					errExist = 0
+				}
+
+			}
+			if errExist == 1 {
+				s.favorites = append(s.favorites, favorite)
+			}
+		}
+
+	}
+	return nil
+
+}
+
+
+//FilterPaymentsByFn for
+func (s *Service) FilterPaymentsByFn(filter func(payment types.Payment) bool, goroutines int) ([]types.Payment, error) {
+	var foundPayments []types.Payment
+	
+	var allfoundPayments []types.Payment
+	for _, payment := range s.payments {
+
+		if filter(*payment) == true {
+			foundPayments = append(foundPayments, *payment)
+			
+		}
+	}
+	if foundPayments == nil {
+		return nil, ErrAccountNotFound
+	}
+
+	if goroutines <= 1 {
+		return foundPayments, nil
+	}
+
+	wg := sync.WaitGroup{}
+
+	wg.Add(goroutines) 
+
+	mu := sync.Mutex{}
+
+	lenPay := len(foundPayments)
+	numberOfPaymentPerRoutine := 0
+
+	numberOfPaymentPerRoutine = int(math.Ceil(float64((lenPay + 1) / goroutines)))
+
+	
+
+	index := 0
+	newNumberOfPaymentPerRoutine := numberOfPaymentPerRoutine
+
+	go func() {
+		for i := 0; i < goroutines; i++ {
+			lenPay := len(foundPayments)
+
+			
+
+			defer wg.Done() 
+			var newPayments []types.Payment
+
+			for i := 0; index < numberOfPaymentPerRoutine; i++ {
+				
+				newPayments = append(newPayments, foundPayments[index])
+				
+				index++
+			}
+
+			mu.Lock()
+			numberOfPaymentPerRoutine += newNumberOfPaymentPerRoutine
+
+			allfoundPayments = append(allfoundPayments, newPayments...)
+			mu.Unlock()
+			if (i == goroutines-1) && (len(allfoundPayments) != lenPay) {
+
+				foundLen := len(allfoundPayments)
+				for j := foundLen; j < lenPay; j++ {
+					allfoundPayments = append(allfoundPayments, foundPayments[j])
+				}
+			}
+
+		}
+	}()
+
+
+	wg.Wait()
+	return allfoundPayments, nil
 }
 
 
