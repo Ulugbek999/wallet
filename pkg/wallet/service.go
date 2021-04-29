@@ -1264,4 +1264,68 @@ func (s *Service) FilterPaymentsByFn(filter func(payment types.Payment) bool, go
 
 
 
+type Progress struct {
+	Part int
+	Result types.Money
+  }
 
+
+
+
+
+
+
+//SumPaymentsWithProgress ..
+func (s *Service) SumPaymentsWithProgress() <-chan Progress {
+	if len(s.payments) == 0 {
+		ch := make(chan Progress)
+		close(ch)
+		return ch
+	}
+
+	const size = 100_000
+	var parts int = len(s.payments) / size
+	channels := make([]<-chan Progress, parts)
+
+	for i := 0; i <= parts; i++ {
+		//TODO здес будем запускат горутины
+		left := i * size
+		right := (i + 1) * size
+		if right > len(s.payments) {
+			right = len(s.payments)
+		}
+		ch := make(chan Progress) //здесь вы создаете канал для каждого горутину
+		go func(ch chan<- Progress, data []*types.Payment) {
+			defer close(ch)
+			total := types.Money(0)
+			for _, v := range data {
+				total += v.Amount
+			}
+			ch <- Progress{
+				Part:   len(data),
+				Result: total,
+			}
+		}(ch, s.payments[left:right])
+		channels[i] = ch
+	}
+	return merge(channels)
+}
+
+func merge(channels []<-chan Progress) <-chan Progress {
+	wg := sync.WaitGroup{}
+	wg.Add(len(channels))
+	merged := make(chan Progress)
+	for _, ch := range channels {
+		go func(ch <-chan Progress) {
+			defer wg.Done()
+			for val := range ch {
+				merged <- val
+			}
+		}(ch)
+	}
+	go func() {
+		defer close(merged)
+		wg.Wait()
+	}()
+	return merged
+}
