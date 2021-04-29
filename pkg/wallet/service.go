@@ -1276,56 +1276,39 @@ type Progress struct {
 
 
 //SumPaymentsWithProgress ..
-func (s *Service) SumPaymentsWithProgress() <-chan Progress {
-	if len(s.payments) == 0 {
-		ch := make(chan Progress)
-		close(ch)
-		return ch
+func (s *Service) SumPaymentsWithProgress() <-chan types.Progress {
+	size := 100_0000
+
+	amountOfMoney := make([]types.Money, 0)
+	for _, pay := range s.payments {
+		amountOfMoney = append(amountOfMoney, pay.Amount)
 	}
 
-	const size = 100_000
-	var parts int = len(s.payments) / size
-	channels := make([]<-chan Progress, parts)
-
-	for i := 0; i <= parts; i++ {
-		//TODO здес будем запускат горутины
-		left := i * size
-		right := (i + 1) * size
-		if right > len(s.payments) {
-			right = len(s.payments)
-		}
-		ch := make(chan Progress) //здесь вы создаете канал для каждого горутину
-		go func(ch chan<- Progress, data []*types.Payment) {
-			defer close(ch)
-			total := types.Money(0)
-			for _, v := range data {
-				total += v.Amount
-			}
-			ch <- Progress{
-				Part:   len(data),
-				Result: total,
-			}
-		}(ch, s.payments[left:right])
-		channels[i] = ch
-	}
-	return merge(channels)
-}
-
-func merge(channels []<-chan Progress) <-chan Progress {
 	wg := sync.WaitGroup{}
-	wg.Add(len(channels))
-	merged := make(chan Progress)
-	for _, ch := range channels {
-		go func(ch <-chan Progress) {
-			defer wg.Done()
-			for val := range ch {
-				merged <- val
-			}
-		}(ch)
+	goroutines := (len(amountOfMoney) + 1) / size
+	ch := make(chan types.Progress)
+	if goroutines <= 0 {
+		goroutines = 1
 	}
+	for i := 0; i < goroutines; i++ {
+		wg.Add(1)
+		go func(ch chan<- types.Progress, amountOfMoney []types.Money, part int) {
+			sum := 0
+			defer wg.Done()
+			for _, val := range amountOfMoney {
+				sum += int(val)
+
+			}
+			ch <- types.Progress{
+				Result: types.Money(sum),
+			}
+		}(ch, amountOfMoney, i)
+	}
+
 	go func() {
-		defer close(merged)
+		defer close(ch)
 		wg.Wait()
 	}()
-	return merged
+
+	return ch
 }

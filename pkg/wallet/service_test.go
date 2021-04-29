@@ -1,631 +1,421 @@
 package wallet
 
+
 import (
-	
-	"io/ioutil"
-	"os"
+	"fmt"
+	"github.com/Ulugbek999/wallet/pkg/types"
+	"github.com/google/uuid"
 	"reflect"
 	"testing"
-	
-
-	"github.com/Ulugbek999/wallet/pkg/types"
 )
 
-func TestService_Register(t *testing.T) {
-	svc := Service{}
-	_, err := svc.RegisterAccount("+992000000000")
-	if err != nil {
-		t.Error(err)
-	}
+type testService struct {
+	*Service
+}
 
-	_, err = svc.RegisterAccount("+992000000000")
-	if err != ErrPhoneNumberRegistred {
-		t.Error(err)
+type testAccount struct {
+	phone    types.Phone
+	balance  types.Money
+	payments []struct {
+		amount   types.Money
+		category types.PaymentCategory
 	}
 }
 
-func TestService_Deposit(t *testing.T) {
-	svc := Service{}
-	err := svc.Deposit(1, 0)
-	if err != ErrAmountMustBePositive {
-		t.Error(err)
+var defaultTestAccount = testAccount{
+	phone:   "+992938151007",
+	balance: 10_000_00,
+	payments: []struct {
+		amount   types.Money
+		category types.PaymentCategory
+	}{{
+		amount:   1000_00,
+		category: "auto",
+	}},
+}
+
+func newTestService() *testService {
+	return &testService{Service: &Service{}}
+}
+
+func (s *testService) addAccountWithBalance(phone types.Phone, balance types.Money) (*types.Account, error) {
+	account, err := s.RegisterAccount(phone)
+
+	if err != nil {
+		return nil, fmt.Errorf("cant register account, error = %v", err)
 	}
 
-	err = svc.Deposit(1, 1)
-	if err != ErrAccountNotFound {
-		t.Error(err)
+	err = s.Deposit(account.ID, balance)
+
+	if err != nil {
+		return nil, fmt.Errorf("cant deposit account, error = %v", err)
 	}
 
-	account, err := svc.RegisterAccount("+992000000010")
+	return account, nil
+}
+
+func (s *testService) addAcoount(data testAccount) (*types.Account, []*types.Payment, error) {
+	account, err := s.RegisterAccount(data.phone)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cant register account %v = ", err)
+	}
+
+	err = s.Deposit(account.ID, data.balance)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cant deposit account %v = ", err)
+	}
+
+	payments := make([]*types.Payment, len(data.payments))
+	for i, payment := range data.payments {
+		payments[i], err = s.Pay(account.ID, payment.amount, payment.category)
+		if err != nil {
+			return nil, nil, fmt.Errorf("cant make payment %v = ", err)
+		}
+	}
+
+	return account, payments, nil
+}
+
+func TestService_FindPaymentByID_success(t *testing.T) {
+	s := newTestService()
+
+	_, payments, err := s.addAcoount(defaultTestAccount)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 
-	err = svc.Deposit(account.ID, 1)
+	payment := payments[0]
+
+	got, err := s.FindPaymentByID(payment.ID)
 	if err != nil {
-		t.Error(err)
+		t.Errorf("FindPaymentId(), error %v", err)
+		return
+	}
+
+	if !reflect.DeepEqual(payment, got) {
+		t.Errorf("FindPaymentId(), wrong payment returned %v = ", got)
 	}
 }
 
-func TestService_Pay(t *testing.T) {
-	svc := Service{}
-	_, err := svc.Pay(1, 0, "auto")
-	if err != ErrAmountMustBePositive {
-		t.Error(err)
-	}
+func TestService_FindPaymentByID_fail(t *testing.T) {
+	s := newTestService()
 
-	_, err = svc.Pay(1, 1, "auto")
-	if err != ErrAccountNotFound {
-		t.Error(err)
-	}
-
-	account, err := svc.RegisterAccount("+992000000000")
+	_, _, err := s.addAcoount(defaultTestAccount)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 
-	_, err = svc.Pay(account.ID, 1, "auto")
-	if err != ErrNotEnoughBalance {
-		t.Error(err)
+	_, err = s.FindPaymentByID(uuid.New().String())
+	if err == nil {
+		t.Errorf("FindPaymentId(), must return error, returned nil %v = ", err)
+		return
 	}
 
-	account.Balance = 100
-
-	_, err = svc.Pay(account.ID, 100, "auto")
-	if err != nil {
-		t.Error(err)
+	if err != ErrPaymentNotFound {
+		t.Errorf("FindPaymentId(), must return ErrPaymentNotFound returned %v = ", err)
 	}
 }
 
 func TestService_FindbyAccountById_success(t *testing.T) {
 	svc := Service{}
-	account, err := svc.RegisterAccount("+992000000000")
+	svc.RegisterAccount("+9929351007")
+	account, err := svc.FindAccountByID(1)
 	if err != nil {
-		t.Error(err)
+		t.Errorf("не удалось найти аккаунт, получили: %v", account)
 	}
 
-	_, err = svc.FindAccountByID(account.ID)
-	if err != nil {
-		t.Error(err)
-	}
 }
 
 func TestService_FindByAccountByID_notFound(t *testing.T) {
 	svc := Service{}
-	svc.RegisterAccount("+992000000000")
-	_, err := svc.FindAccountByID(2)
-	// тут даст false, так как err (уже имеет что то внутри)
-	if err != ErrAccountNotFound {
-		t.Error(err)
-	}
-}
-
-func TestFindPaymentByID_success(t *testing.T) {
-	svc := &Service{}
-
-	phone := types.Phone("+992000000000")
-
-	account, err := svc.RegisterAccount(phone)
-	if err != nil {
-		t.Error(err)
-		return
+	svc.RegisterAccount("+992938151007")
+	account, err := svc.FindAccountByID(2)
+	if err == nil {
+		t.Errorf("аккаунт найден, аккаунт: %v", account)
 	}
 
-	err = svc.Deposit(account.ID, 1000)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	pay, err := svc.Pay(account.ID, 500, "auto")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	got, err := svc.FindPaymentByID(pay.ID)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	if !reflect.DeepEqual(got, pay) {
-		t.Error(err)
-		return
-	}
 }
 
 func TestService_Reject_success(t *testing.T) {
-	svc := &Service{}
+	// создаем сервис
+	s := newTestService()
 
-	phone := types.Phone("+992000000000")
-
-	account, err := svc.RegisterAccount(phone)
+	_, payments, err := s.addAcoount(defaultTestAccount)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	err = svc.Deposit(account.ID, 1000)
+	payment := payments[0]
+	err = s.Reject(payment.ID)
+
 	if err != nil {
-		t.Error(err)
+		t.Errorf("Reject(): error = %v", err)
 		return
 	}
 
-	pay, err := svc.Pay(account.ID, 500, "auto")
+	savedPayment, err := s.FindPaymentByID(payment.ID)
 	if err != nil {
-		t.Error(err)
+		t.Errorf("Reject(): cant find payment by id, error = %v", err)
+		return
+	}
+	if savedPayment.Status != types.PaymentStatusFail {
+		t.Errorf("Reject(): status didnt changed, payment = %v", savedPayment)
 		return
 	}
 
-	err = svc.Reject(pay.ID)
+	savedAccount, err := s.FindAccountByID(payment.AccountID)
 	if err != nil {
-		t.Error(err)
+		t.Errorf("Reject(): cant find account by id, error = %v", err)
 		return
 	}
-}
-
-func TestService_Reject_fail(t *testing.T) {
-	svc := Service{}
-
-	svc.RegisterAccount("+992000000000")
-
-	account, err := svc.FindAccountByID(1)
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = svc.Deposit(account.ID, 1000_00)
-	if err != nil {
-		t.Error(err)
-	}
-
-	payment, err := svc.Pay(account.ID, 100_00, "auto")
-	if err != nil {
-		t.Error(err)
-	}
-
-	pay, err := svc.FindPaymentByID(payment.ID)
-	if err != nil {
-		t.Error(pay)
-	}
-
-	editPayID := "4"
-
-	err = svc.Reject(editPayID)
-	if err != ErrPaymentNotFound {
-		t.Error(err)
+	if savedAccount.Balance != defaultTestAccount.balance {
+		t.Errorf("Reject(): balance didnt changed, balance = %v", savedAccount)
+		return
 	}
 }
 
 func TestService_Repeat_success(t *testing.T) {
-	svc := &Service{}
 
-	phone := types.Phone("+992000000000")
+	s := newTestService()
 
-	account, err := svc.RegisterAccount(phone)
+	_, payments, err := s.addAcoount(defaultTestAccount)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	err = svc.Deposit(account.ID, 1000)
+	payment := payments[0]
+	newPayment, err := s.Repeat(payment.ID)
+
+	if err != nil {
+		t.Errorf("Repeat(): error = %v", err)
+		return
+	}
+
+	if newPayment.AccountID != payment.AccountID {
+		t.Errorf("Repeat(): error = %v", err)
+		return
+	}
+
+	if newPayment.Amount != payment.Amount {
+		t.Errorf("Repeat(): error = %v", err)
+		return
+	}
+
+	if newPayment.Category != payment.Category {
+		t.Errorf("Repeat(): error = %v", err)
+		return
+	}
+
+	if newPayment.Status != payment.Status {
+		t.Errorf("Repeat(): error = %v", err)
+		return
+	}
+
+}
+
+func TestService_FindFavoriteByID_succes(t *testing.T) {
+	s := newTestService()
+
+	_, payments, err := s.addAcoount(defaultTestAccount)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	pay, err := svc.Pay(account.ID, 500, "auto")
+	payment := payments[0]
+	favorite, err := s.FavoritePayment(payment.ID, "ogastus")
 	if err != nil {
-		t.Error(err)
-		return
+		t.Errorf("favorite cant find, error = %v", err)
 	}
 
-	_, err = svc.Repeat(pay.ID)
+	paymentFavorite, err := s.PayFromFavorite(favorite.ID)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Errorf("PayFromFavorite() Error() can't for an favorite(%v), error = %v", paymentFavorite, err)
 	}
 }
 
-func TestService_FavoritePayment_success(t *testing.T) {
-	svc := &Service{}
+func TestService_Export_success(t *testing.T) {
+	s := newTestService()
 
-	phone := types.Phone("+992000000000")
-
-	account, err := svc.RegisterAccount(phone)
+	_, payments, err := s.addAcoount(defaultTestAccount)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	err = svc.Deposit(account.ID, 1000)
+	_, payments, err = s.addAcoount(testAccount{
+		phone:   "+992938151003",
+		balance: 10_000_00,
+		payments: []struct {
+			amount   types.Money
+			category types.PaymentCategory
+		}{{
+			amount:   1000_00,
+			category: "auto",
+		}},
+	})
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	pay, err := svc.Pay(account.ID, 500, "auto")
+	payment := payments[0]
+	favorite, err := s.FavoritePayment(payment.ID, "ogastus")
 	if err != nil {
-		t.Error(err)
-		return
+		t.Errorf("cant find favorite, error = %v", err)
 	}
 
-	favorite, err := svc.FavoritePayment(pay.ID, "pay")
+	paymentFavorite, err := s.PayFromFavorite(favorite.ID)
 	if err != nil {
-		t.Error(err)
-		return
+		t.Errorf("PayFromFavorite() can't for an favorite(%v), error = %v", paymentFavorite, err)
 	}
 
-	t.Log(favorite)
-}
-
-func TestService_PayFromFavorite_success(t *testing.T) {
-	svc := &Service{}
-
-	phone := types.Phone("+992000000000")
-
-	account, err := svc.RegisterAccount(phone)
+	err = s.Export("data")
 	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	err = svc.Deposit(account.ID, 1000)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	pay, err := svc.Pay(account.ID, 500, "auto")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	favorite, err := svc.FavoritePayment(pay.ID, "pay")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	_, err = svc.PayFromFavorite(favorite.ID)
-	if err != nil {
-		t.Error(err)
-		return
+		t.Errorf("Export() Error can't export error = %v", err)
 	}
 }
 
-func TestService_ExportToFile_EmptyData(t *testing.T) {
-	svc := &Service{}
+func TestService_Import_success(t *testing.T) {
+	s := newTestService()
 
-	err := svc.ExportToFile("1.txt")
-	if err != nil {
-		t.Error(err)
-	}
-	file, err := os.Open("1.txt")
-	if err != nil {
-		t.Error(err)
-	}
+	err := s.Import("data")
 
-	stats, err := file.Stat()
 	if err != nil {
-		t.Error(err)
-	}
-
-	if stats.Size() != 0 {
-		t.Error("file must be zero")
+		t.Errorf("Import() Error can't import error = %v", err)
 	}
 }
 
-func TestService_ExportToFile(t *testing.T) {
-	svc := &Service{}
+func TestService_HistoryToFiles_success(t *testing.T) {
+	s := newTestService()
 
-	_, err := svc.RegisterAccount("+992000000000")
+	_, _, err := s.addAcoount(defaultTestAccount)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 
-	err = svc.ExportToFile("1.txt")
-	if err != nil {
-		t.Error(err)
-	}
-	file, err := os.Open("1.txt")
-	if err != nil {
-		t.Error(err)
-	}
-
-	stats, err := file.Stat()
-	if err != nil {
-		t.Error(err)
-	}
-
-	if stats.Size() == 0 {
-		t.Error("file must be zero")
-	}
-}
-
-func TestService_ImportToFile(t *testing.T) {
-	svc := &Service{}
-
-	err := svc.ImportFromFile("1.txt")
-	if err != nil {
-		t.Error(err)
-	}
-
-	k := 0
-	for _, account := range svc.accounts {
-		if account.Phone == "+992000000000" {
-			k++
-		}
-	}
-
-	if k <= 0 {
-		t.Error("incorrect func")
-	}
-}
-
-func TestSetice_Export(t *testing.T) {
-	svc := &Service{}
-
-	account, err := svc.RegisterAccount("+992000000000")
-	if err != nil {
-		t.Error(err)
-	}
-
-	account.Balance = 100
-
-	payment, err := svc.Pay(account.ID, 100, "auto")
-	if err != nil {
-		t.Error(err)
-	}
-
-	_, err = svc.FavoritePayment(payment.ID, "isbraniy")
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = svc.Export(".")
-	if err != nil {
-		t.Error(err)
-	}
-
-	_, err = ioutil.ReadFile("accounts.dump")
-	if err != nil {
-		t.Error(err)
-	}
-
-	_, err = ioutil.ReadFile("payments.dump")
-	if err != nil {
-		t.Error(err)
-	}
-
-	_, err = ioutil.ReadFile("favorites.dump")
-	if err != nil {
-		t.Error(err)
-	}
-}
-
-func TestService_Import(t *testing.T) {
-	svc := &Service{}
-
-	err := svc.Import(".")
-	if err != nil {
-		t.Error(err)
-	}
-
-	if svc.accounts[0].Phone != "+992000000000" {
-		t.Error("incorrect func")
-	}
-}
-func TestService_Import_IfHaveData(t *testing.T) {
-	svc := &Service{}
-
-	account, err := svc.RegisterAccount("+992000000000")
-	if err != nil {
-		t.Error(err)
-	}
-
-	account.Balance = 100
-
-	payment, err := svc.Pay(account.ID, 100, "auto")
-	if err != nil {
-		t.Error(err)
-	}
-
-	_, err = svc.FavoritePayment(payment.ID, "isbraniy")
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = svc.Import(".")
-	if err != nil {
-		t.Error(err)
-	}
-
-	if account.Phone == "+992" {
-		t.Error("incorrect func")
-	}
-}
-
-func TestService_HistoryToFile(t *testing.T) {
-	svc := &Service{}
-
-	payments := []types.Payment{
-		{
-			ID:        "1",
-			AccountID: 1,
-			Amount:    10,
-			Category:  "auto",
-			Status:    "active",
+	_, _, err = s.addAcoount(testAccount{
+		phone:   "+992938151008",
+		balance: 10_000_00,
+		payments: []struct {
+			amount   types.Money
+			category types.PaymentCategory
+		}{{
+			amount:   1000_00,
+			category: "auto",
+		}, {
+			amount:   1020_00,
+			category: "auto",
 		},
-		{
-			ID:        "2",
-			AccountID: 1,
-			Amount:    10,
-			Category:  "auto",
-			Status:    "active",
-		},
-		{
-			ID:        "3",
-			AccountID: 1,
-			Amount:    10,
-			Category:  "auto",
-			Status:    "active",
-		},
-		{
-			ID:        "4",
-			AccountID: 1,
-			Amount:    10,
-			Category:  "auto",
-			Status:    "active",
-		},
-		{
-			ID:        "5",
-			AccountID: 1,
-			Amount:    10,
-			Category:  "auto",
-			Status:    "active",
-		},
-		{
-			ID:        "6",
-			AccountID: 1,
-			Amount:    10,
-			Category:  "auto",
-			Status:    "active",
-		},
-		{
-			ID:        "7",
-			AccountID: 1,
-			Amount:    10,
-			Category:  "auto",
-			Status:    "active",
-		},
-		{
-			ID:        "8",
-			AccountID: 1,
-			Amount:    10,
-			Category:  "auto",
-			Status:    "active",
-		},
-		{
-			ID:        "9",
-			AccountID: 1,
-			Amount:    10,
-			Category:  "auto",
-			Status:    "active",
-		},
-		{
-			ID:        "10",
-			AccountID: 1,
-			Amount:    10,
-			Category:  "auto",
-			Status:    "active",
-		},
-	}
+			{
+				amount:   1030_00,
+				category: "auto",
+			}},
+	})
 
-	err := svc.HistoryToFiles(payments, ".", 3)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 
-	err = svc.HistoryToFiles(payments, ".", 4)
+	payments, err := s.ExportAccountHistory(2)
 	if err != nil {
 		t.Error(err)
+		return
 	}
 
-	err = svc.HistoryToFiles(payments, ".", 5)
+	err = s.HistoryToFiles(payments, "data", 2)
 	if err != nil {
-		t.Error(err)
-	}
-
-	err = svc.HistoryToFiles(payments, ".", 10)
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = svc.HistoryToFiles(payments, ".", 11)
-	if err != nil {
-		t.Error(err)
-	}
-
-	err = svc.HistoryToFiles(payments, ".", 1)
-	if err != nil {
-		t.Error(err)
-	}
-
-}
-
-func fileFunc(l int, t *testing.T) {
-	files, err := ioutil.ReadDir("./test")
-	if err != nil {
-		t.Error(err)
-	}
-
-	if len(files) != l {
-		t.Error("incorrect")
-	}
-
-	for _, file := range files {
-		err = os.Remove("test/" + file.Name())
-		if err != nil {
-			t.Error(err)
-		}
+		t.Errorf("HistoryToFiles() Error can't export to file, error = %v", err)
+		return
 	}
 }
 
-func TestService_SumPayments(t *testing.T) {
-	svc := &Service{}
+func BenchmarkSumPayments(b *testing.B) {
+	s := newTestService()
 
-	for i := 0; i < 103; i++ {
-		svc.payments = append(svc.payments, &types.Payment{Amount: 1})
-	}
+	_, _, err := s.addAcoount(testAccount{
+		phone:   "+992938151002",
+		balance: 10_000,
+		payments: []struct {
+			amount   types.Money
+			category types.PaymentCategory
+		}{
+			{
+				amount:   100,
+				category: "auto",
+			},
+			{
+				amount:   200,
+				category: "auto",
+			},
+			{
+				amount:   300,
+				category: "auto",
+			},
+			{
+				amount:   400,
+				category: "auto",
+			},
+			{
+				amount:   500,
+				category: "auto",
+			},
+			{
+				amount:   600,
+				category: "auto",
+			},
+			{
+				amount:   100,
+				category: "auto",
+			},
+			{
+				amount:   100,
+				category: "auto",
+			},
+			{
+				amount:   100,
+				category: "auto",
+			},
+			{
+				amount: 100,
+				category: "auto",
+			},
+		},
+	})
 
-	sum := svc.SumPayments(10)
-	if sum != 103 {
-		t.Error("incoorect")
-	}
-}
-
-func Benchmark_SumPayments(b *testing.B) {
-	svc := &Service{}
-
-	for i := 0; i < 103; i++ {
-		svc.payments = append(svc.payments, &types.Payment{Amount: 1})
-	}
-
-	result := 103
-
-	for i := 0; i < b.N; i++ {
-		sum := svc.SumPayments(result)
-		if result != int(sum) {
-			b.Fatalf("invalid result, got %v, want %v", sum, result)
-		}
-	}
-}
-
-func Benchmark_FilterPayments(b *testing.B) {
-	svc := &Service{}
-
-	account, err := svc.RegisterAccount("+992000000000")
 	if err != nil {
 		b.Error(err)
-	}
-	for i := 0; i < 103; i++ {
-		svc.payments = append(svc.payments, &types.Payment{AccountID: account.ID, Amount: 1})
+		return
 	}
 
-	result := 103
+	want := types.Money(2500)
 
 	for i := 0; i < b.N; i++ {
-		payments, err := svc.FilterPayments(account.ID, result)
-		if err != nil {
-			b.Error(err)
-		}
-
-		if result != len(payments) {
-			b.Fatalf("invalid result, got %v, want %v", len(payments), result)
+		// на каждый горутине по 2 слайса
+		result := s.SumPayments(100)
+		if result != want {
+			b.Fatalf("invalid result, got = %v want = %v", result, want)
 		}
 	}
 }
 
+
+func TestService_SumPaymentsWithProgress(t *testing.T) {
+	s := newTestService()
+	for i := 0; i < 200_000; i++ {
+		payment := &types.Payment{
+			ID:     uuid.New().String(),
+			Amount: types.Money(100),
+		}
+		s.payments = append(s.payments, payment)
+	}
+
+	s.SumPaymentsWithProgress()
+	
+}
