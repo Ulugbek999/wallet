@@ -42,3 +42,11 @@ type Favorite struct {
 	Amount    Money
 	Category  PaymentCategory
 }
+
+
+// Structure for homework 19
+
+type Progress struct {
+  Part int
+  Result Money
+}
